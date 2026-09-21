@@ -238,3 +238,24 @@ document.addEventListener('DOMContentLoaded', function () {
     });
  
 });
+ 
+ 
+/* ---------------------------------------------------
+   5. MENÚ HAMBURGUESA — móvil
+--------------------------------------------------- */
+ 
+const navToggle = document.querySelector('.nav-toggle');
+const navPill   = document.querySelector('.wf-pill');
+ 
+if (navToggle && navPill) {
+    navToggle.addEventListener('click', () => {
+        navPill.classList.toggle('is-open');
+    });
+ 
+    // Cerrar menú al hacer clic en un link
+    navPill.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', () => {
+            navPill.classList.remove('is-open');
+        });
+    });
+}
