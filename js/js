@@ -1,0 +1,286 @@
+document.addEventListener('DOMContentLoaded', function () {
+
+    /* ---------------------------------------------------
+       0. REINICIAR EL EFECTO DE ESCRITURA AL DAR CLIC EN "INICIO"
+       La animación del título (.typewriter-text) solo corre
+       una vez al cargar la página. Este bloque la reinicia
+       cada vez que el usuario da clic en el enlace "Inicio"
+       del menú.
+    --------------------------------------------------- */
+
+    const heroTitleText = document.querySelector('.typewriter-text');
+    const inicioLink = document.querySelector('.wf-pill a[href="#inicio"]');
+
+    if (heroTitleText && inicioLink) {
+        inicioLink.addEventListener('click', () => {
+            heroTitleText.classList.remove('typewriter-text');
+            void heroTitleText.offsetWidth; // fuerza al navegador a "olvidar" la animación anterior
+            heroTitleText.classList.add('typewriter-text');
+        });
+    }
+
+
+    /* ---------------------------------------------------
+       1. FOTOS CON MOVIMIENTO
+       - Al entrar en pantalla: aparecen con un pequeño
+         deslizamiento (una sola vez, con IntersectionObserver).
+       - Mientras el mouse se mueve dentro del bloque: las
+         fotos se desplazan un poco distinto entre sí
+         (efecto parallax), usando data-depth de cada foto.
+    --------------------------------------------------- */
+
+    const parallaxBlocks = document.querySelectorAll('.parallax-pair');
+
+    if ('IntersectionObserver' in window) {
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('in-view');
+                    revealObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.25 });
+
+        parallaxBlocks.forEach((block) => revealObserver.observe(block));
+    } else {
+        // Sin soporte para IntersectionObserver: mostrar directo
+        parallaxBlocks.forEach((block) => block.classList.add('in-view'));
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!prefersReducedMotion) {
+        parallaxBlocks.forEach((block) => {
+            const photos = block.querySelectorAll('.ph-photo[data-depth]');
+
+            block.addEventListener('mousemove', (event) => {
+                const rect = block.getBoundingClientRect();
+                const offsetX = (event.clientX - rect.left) / rect.width - 0.5;  // -0.5 a 0.5
+                const offsetY = (event.clientY - rect.top) / rect.height - 0.5;
+
+                photos.forEach((photo) => {
+                    const depth = parseFloat(photo.dataset.depth) || 0.2;
+                    const moveX = offsetX * 40 * depth;
+                    const moveY = offsetY * 40 * depth;
+                    photo.style.transform = `translate(${moveX}px, ${moveY}px)`;
+                });
+            });
+
+            block.addEventListener('mouseleave', () => {
+                photos.forEach((photo) => {
+                    photo.style.transform = 'translate(0, 0)';
+                });
+            });
+        });
+    }
+
+
+    /* ---------------------------------------------------
+       2. PROYECTOS (3 botones)
+       Cada botón trae su título/descripción/video en
+       data-title / data-text / data-video.
+
+       Antes de cambiar de video se guarda el segundo exacto
+       en el que iba, así que al volver a ese botón el video
+       continúa desde donde quedó en vez de empezar de cero
+       o quedarse en negro.
+    --------------------------------------------------- */
+
+    const proyectoBtns  = document.querySelectorAll('.proyecto-btn');
+    const proyectoPanel = document.querySelector('.proyecto-panel');
+    const proyectoTitle = document.getElementById('proyecto-title');
+    const proyectoText  = document.getElementById('proyecto-text');
+    const proyectoVideo = document.getElementById('proyecto-video');
+
+    if (proyectoVideo && proyectoPanel) {
+
+        // Aquí se guarda el segundo en el que quedó cada video
+        const tiemposVideo = {};
+
+        // Video que se está viendo en este momento
+        const btnInicial = document.querySelector('.proyecto-btn.is-active');
+        let videoActual = btnInicial ? btnInicial.dataset.video : '';
+
+        proyectoBtns.forEach((btn) => {
+            btn.addEventListener('click', () => {
+
+                // Si ya está activo no se toca nada: el video sigue corriendo
+                if (btn.classList.contains('is-active')) return;
+
+                const nuevoVideo = btn.dataset.video;
+
+                // 1) Recordar dónde iba el video que se estaba viendo
+                if (videoActual) {
+                    tiemposVideo[videoActual] = proyectoVideo.currentTime;
+                }
+                const estabaReproduciendo = !proyectoVideo.paused;
+
+                // 2) Marcar el botón seleccionado
+                proyectoBtns.forEach((b) => {
+                    b.classList.remove('is-active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                btn.classList.add('is-active');
+                btn.setAttribute('aria-selected', 'true');
+
+                proyectoPanel.classList.add('is-switching');
+
+                window.setTimeout(() => {
+
+                    proyectoTitle.textContent = btn.dataset.title;
+                    proyectoText.textContent  = btn.dataset.text;
+
+                    // 3) Cargar el nuevo video
+                    proyectoVideo.pause();
+                    proyectoVideo.src = nuevoVideo;
+                    proyectoVideo.load();
+
+                    // 4) Cuando ya conozca la duración, ubicarlo donde quedó
+                    proyectoVideo.addEventListener('loadedmetadata', function restaurar() {
+                        proyectoVideo.removeEventListener('loadedmetadata', restaurar);
+
+                        const t = tiemposVideo[nuevoVideo] || 0;
+                        if (t > 0 && t < proyectoVideo.duration) {
+                            proyectoVideo.currentTime = t;
+                        }
+
+                        // Si el anterior venía reproduciéndose, este también sigue
+                        if (estabaReproduciendo) {
+                            proyectoVideo.play().catch(() => {});
+                        }
+                    });
+
+                    videoActual = nuevoVideo;
+                    proyectoPanel.classList.remove('is-switching');
+
+                }, 220);
+            });
+        });
+    }
+
+
+    /* ---------------------------------------------------
+       3. CINTA DE ROLES: se mueve sola Y se puede arrastrar
+       El track con los 6 integrantes se duplica una vez
+       (clones con aria-hidden, sin foco de teclado) para
+       que el recorrido se vea infinito. El movimiento lo
+       controla un bucle con requestAnimationFrame, así que
+       el usuario puede tomarlo con el mouse (o el dedo) y
+       moverlo él mismo; al soltar, sigue avanzando solo
+       desde donde quedó.
+    --------------------------------------------------- */
+
+    const rolesTrack = document.getElementById('roles-track');
+    const rolesMarquee = document.querySelector('.roles-marquee');
+
+    if (rolesTrack && rolesMarquee) {
+
+        // Duplicar las tarjetas una vez para el loop sin salto
+        const originalCards = Array.from(rolesTrack.children);
+        originalCards.forEach((card) => {
+            const clone = card.cloneNode(true);
+            clone.setAttribute('aria-hidden', 'true');
+            clone.querySelectorAll('a, button').forEach((el) => el.setAttribute('tabindex', '-1'));
+            rolesTrack.appendChild(clone);
+        });
+
+        const SPEED = 230; // píxeles por segundo del avance automático
+
+        let setWidth = 0;      // ancho de un set completo (mitad del track ya duplicado)
+        let position = 0;      // desplazamiento actual en px (negativo = movido a la izquierda)
+        let isHovering = false;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartPos = 0;
+        let lastTime = null;
+
+        function measure() {
+            setWidth = rolesTrack.scrollWidth / 2;
+        }
+
+        function wrap() {
+            if (setWidth <= 0) return;
+            position = position % setWidth;
+            if (position > 0) position -= setWidth;
+        }
+
+        function applyTransform() {
+            rolesTrack.style.transform = `translateX(${position}px)`;
+        }
+
+        function frame(time) {
+            if (lastTime === null) lastTime = time;
+            const dt = (time - lastTime) / 1000;
+            lastTime = time;
+
+            if (!isDragging && !isHovering) {
+                position -= SPEED * dt;
+                wrap();
+                applyTransform();
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function dragStart(clientX) {
+            isDragging = true;
+            dragStartX = clientX;
+            dragStartPos = position;
+            rolesTrack.classList.add('is-dragging');
+        }
+
+        function dragMove(clientX) {
+            if (!isDragging) return;
+            position = dragStartPos + (clientX - dragStartX);
+            wrap();
+            applyTransform();
+        }
+
+        function dragEnd() {
+            isDragging = false;
+            rolesTrack.classList.remove('is-dragging');
+        }
+
+        measure();
+        window.addEventListener('resize', measure);
+
+        rolesMarquee.addEventListener('mouseenter', () => { isHovering = true; });
+        rolesMarquee.addEventListener('mouseleave', () => { isHovering = false; });
+        rolesMarquee.addEventListener('focusin', () => { isHovering = true; });
+        rolesMarquee.addEventListener('focusout', () => { isHovering = false; });
+
+        rolesMarquee.addEventListener('pointerdown', (e) => {
+            dragStart(e.clientX);
+            rolesMarquee.setPointerCapture(e.pointerId);
+        });
+        rolesMarquee.addEventListener('pointermove', (e) => dragMove(e.clientX));
+        rolesMarquee.addEventListener('pointerup', dragEnd);
+        rolesMarquee.addEventListener('pointercancel', dragEnd);
+
+        applyTransform();
+
+        if (!prefersReducedMotion) {
+            requestAnimationFrame(frame);
+        }
+        // Con "reducir movimiento" activado, el usuario igual puede arrastrar
+        // la cinta manualmente; solo se desactiva el avance automático.
+    }
+
+
+    /* ================================
+       4. SERVICIOS — tarjetas que se voltean
+       Las 4 tarjetas se ven siempre completas (sin carrusel).
+       El giro pasa solo con CSS (:hover) en mouse/trackpad;
+       en pantallas táctiles no existe "hover", así que aquí
+       se agrega la clase "is-flipped" con el toque para que
+       el mismo efecto funcione igual en celular.
+    ================================ */
+
+    const servicioCards = document.querySelectorAll('.servicio-card');
+
+    servicioCards.forEach((card) => {
+        card.addEventListener('click', () => {
+            card.classList.toggle('is-flipped');
+        });
+    });
+
+});
