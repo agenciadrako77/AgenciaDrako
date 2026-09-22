@@ -1237,6 +1237,12 @@ footer .container {
     .logo-anim-wrap {
         width: 250px;
         margin: 0 auto;
+        overflow: hidden;
+    }
+ 
+    .logo-gif {
+        width: 100%;
+        max-width: 100%;
     }
  
     /* Misión / Visión */
@@ -1399,6 +1405,12 @@ footer .container {
  
     .logo-anim-wrap {
         width: 200px;
+        overflow: hidden;
+    }
+ 
+    .logo-gif {
+        width: 100%;
+        max-width: 100%;
     }
  
     /* Misión / Visión */
